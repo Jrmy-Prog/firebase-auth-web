@@ -1,0 +1,208 @@
+<!DOCTYPE HTML>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ruang Akun</title>
+
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+
+<body>
+  <main>
+    <header>
+      <span class="brand">RUANG AKUN</span>
+      <h1>Selamat datang.</h1>
+      <p>Masuk dan kelola verifikasi akun Anda.</p>
+    </header>
+
+    <p id="message" role="status" aria-live="polite">
+      Memuat konfigurasi…
+    </p>
+
+    <section id="guest" hidden>
+      <nav aria-label="Metode autentikasi">
+        <button type="button" data-panel="signin">Masuk</button>
+        <button type="button" data-panel="signup">Daftar</button>
+        <button type="button" data-panel="phone">Nomor telepon</button>
+      </nav>
+
+      <!-- Masuk menggunakan email dan password -->
+      <form id="signin">
+        <h2>Masuk ke akun</h2>
+
+        <label>
+          Email
+          <input
+            name="email"
+            type="email"
+            autocomplete="username"
+            maxlength="254"
+            required
+          >
+        </label>
+
+        <label>
+          Password
+          <input
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            maxlength="4096"
+            required
+          >
+        </label>
+
+        <button type="submit">Masuk</button>
+      </form>
+
+      <!-- Pendaftaran akun email -->
+      <form id="signup" hidden>
+        <h2>Buat akun baru</h2>
+
+        <label>
+          Email
+          <input
+            name="email"
+            type="email"
+            autocomplete="username"
+            maxlength="254"
+            required
+          >
+        </label>
+
+        <label>
+          Password
+          <input
+            id="new-password"
+            name="password"
+            type="password"
+            autocomplete="new-password"
+            minlength="12"
+            maxlength="128"
+            aria-describedby="rules strength"
+            required
+          >
+        </label>
+
+        <p id="rules">
+          12–128 karakter, huruf besar, huruf kecil, angka, dan simbol.
+          Gunakan password unik yang panjang.
+        </p>
+
+        <meter
+          id="meter"
+          min="0"
+          max="5"
+          value="0"
+          aria-label="Indikator password"
+        ></meter>
+
+        <p id="strength">Belum diisi</p>
+
+        <label>
+          Ulangi password
+          <input
+            name="confirm"
+            type="password"
+            autocomplete="new-password"
+            maxlength="128"
+            required
+          >
+        </label>
+
+        <button type="submit">Daftar</button>
+      </form>
+
+      <!-- Masuk menggunakan nomor telepon -->
+      <section id="phone" hidden>
+        <h2>Masuk dengan SMS</h2>
+
+        <form id="send-sms">
+          <label>
+            Nomor telepon
+            <input
+              name="phone"
+              type="tel"
+              autocomplete="tel"
+              placeholder="+6281234567890"
+              pattern="\+[1-9][0-9]{7,14}"
+              required
+            >
+          </label>
+
+          <label class="consent">
+            <input name="consent" type="checkbox" required>
+            Saya menyetujui nomor dikirim dan disimpan oleh Google
+            untuk pencegahan spam dan penyalahgunaan serta pengiriman
+            SMS verifikasi.
+          </label>
+
+          <div id="recaptcha"></div>
+
+          <button type="submit">Kirim kode SMS</button>
+        </form>
+
+        <form id="confirm-sms" hidden>
+          <label>
+            Kode SMS
+            <input
+              name="code"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              pattern="[0-9]{6}"
+              maxlength="6"
+              required
+            >
+          </label>
+
+          <button type="submit">Verifikasi dan masuk</button>
+        </form>
+
+        <p>
+          Login telepon membuat atau membuka akun telepon.
+          Fitur ini bukan MFA atau pengaitan nomor ke akun email.
+        </p>
+      </section>
+    </section>
+
+    <!-- Ditampilkan setelah pengguna masuk -->
+    <section id="account" hidden>
+      <h2>Akun Anda</h2>
+
+      <p id="identity"></p>
+      <p id="verified"></p>
+
+      <div class="actions">
+        <button id="resend" type="button">
+          Kirim email verifikasi
+        </button>
+
+        <button id="refresh" type="button">
+          Saya sudah verifikasi
+        </button>
+
+        <button id="private" type="button">
+          Akses API terlindungi
+        </button>
+
+        <button id="logout" type="button">
+          Keluar
+        </button>
+      </div>
+
+      <pre id="result"></pre>
+    </section>
+
+    <noscript>
+      <p>Aktifkan JavaScript di browser untuk menggunakan aplikasi.</p>
+    </noscript>
+
+    <footer>
+      Password dan kode SMS diproses langsung oleh Firebase.
+    </footer>
+  </main>
+</body>
+</html>
