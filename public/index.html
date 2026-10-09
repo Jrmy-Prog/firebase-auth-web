@@ -7,6 +7,7 @@
 
   <link rel="stylesheet" href="/style.css">
   <script type="module" src="/app.js"></script>
+  <script type="module" src="/camera.js"></script>
 </head>
 
 <body>
@@ -236,6 +237,55 @@
       </div>
 
       <div id="dashboard" hidden>
+        <section class="camera-card">
+  <h3>Kamera akun</h3>
+  <p>
+    Aktifkan kamera untuk mengambil foto.
+    Foto tidak otomatis dikirim ke server.
+  </p>
+
+  <div class="camera-frame">
+    <video
+      id="camera-video"
+      autoplay
+      playsinline
+      muted
+      hidden
+    ></video>
+
+    <img
+      id="camera-photo"
+      alt="Foto yang baru diambil"
+      hidden
+    >
+
+    <p id="camera-placeholder">Kamera belum aktif.</p>
+  </div>
+
+  <canvas id="camera-canvas" hidden></canvas>
+
+  <div class="actions">
+    <button id="camera-start" type="button">
+      Aktifkan kamera
+    </button>
+
+    <button id="camera-capture" type="button" disabled>
+      Ambil foto
+    </button>
+
+    <button id="camera-stop" type="button" disabled>
+      Matikan kamera
+    </button>
+
+    <a id="camera-download" class="download-button" hidden>
+      Unduh foto
+    </a>
+  </div>
+
+  <p id="camera-message" role="status" aria-live="polite">
+    Browser akan meminta izin saat kamera diaktifkan.
+  </p>
+</section>
         <div class="banner">
           <span>AKUN TERVERIFIKASI</span>
           <h3>Selamat datang kembali!</h3>

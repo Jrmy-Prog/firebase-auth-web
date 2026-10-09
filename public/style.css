@@ -63,3 +63,52 @@ footer { margin-top: 30px; font-size: 13px; }
   main { padding: 24px; }
   h1 { font-size: 30px; }
 }
+
+.camera-card {
+  margin-top: 24px;
+  padding: 24px;
+  border: 1px solid #dfe9e3;
+  border-radius: 18px;
+}
+
+.camera-frame {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  margin: 20px 0;
+  overflow: hidden;
+  background: #eef3f0;
+  border-radius: 14px;
+}
+
+.camera-frame video,
+.camera-frame img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+}
+
+#camera-placeholder {
+  padding: 20px;
+  text-align: center;
+}
+
+.download-button {
+  display: inline-block;
+  padding: 12px 18px;
+  background: #edf3f0;
+  color: #17664e;
+  border: 1px solid #c8dbd1;
+  border-radius: 10px;
+  text-decoration: none;
+}
+
+.download-button:focus-visible {
+  outline: 3px solid #93d4b6;
+  outline-offset: 2px;
+}
+
+#camera-message {
+  font-size: 14px;
+}

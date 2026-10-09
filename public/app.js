@@ -123,6 +123,7 @@ function renderAccount(user) {
   );
 
   if (!user) {
+    window.dispatchEvent (new Event("account-signed-out"));
     $("dashboard").hidden = true;
     $("verification-panel").hidden = true;
     showPanel("signin");

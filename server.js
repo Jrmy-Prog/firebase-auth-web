@@ -120,6 +120,13 @@ app.get(
   }
 );
 
+app.use((_req, res, next) => {
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(self), microphone=()"
+  );
+  next();
+});
 app.use(express.static(
   fileURLToPath(new URL("./public/", import.meta.url))
 ));
