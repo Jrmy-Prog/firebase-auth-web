@@ -132,8 +132,8 @@ app.use((_error, _req, res, _next) => {
   res.status(500).json({ error: "Terjadi kesalahan server." });
 });
 
-app.listen(
-  Number(process.env.PORT || 3000),
-  "0.0.0.0",
-  () => console.log("Aplikasi siap.")
-);
+const port = Number(process.env.PORT || 3000);
+
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Application running in: http://localhost:${port}`);
+});

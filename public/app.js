@@ -9,6 +9,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
+  sendPasswordResetEmail,
   signOut,
   reload,
   validatePassword,
@@ -16,57 +17,91 @@ import {
   signInWithPhoneNumber
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 
-import { passwordCheck } from "./password.js";
-
 const $ = id => document.getElementById(id);
 
 let auth;
 let verifier;
 let confirmation;
-let smsReadyAt = 0;
+
 let emailReadyAt = 0;
+let smsReadyAt = 0;
+let resetReadyAt = 0;
 
 function message(text) {
   $("message").textContent = text;
 }
 
-function safeError(error, context) {
-  const code = error?.code;
+function showPanel(selected) {
+  for (const id of [
+    "signin",
+    "signup",
+    "phone",
+    "reset-password"
+  ]) {
+    $(id).hidden = id !== selected;
+  }
+}
 
-  if (code === "auth/network-request-failed") {
+function passwordCheck(value) {
+  const checks = [
+    value.length >= 12,
+    /[a-z]/.test(value),
+    /[A-Z]/.test(value),
+    /[0-9]/.test(value),
+    /[^A-Za-z0-9]/.test(value)
+  ];
+
+  return {
+    valid: checks.every(Boolean) && value.length <= 128,
+    score: checks.filter(Boolean).length
+  };
+}
+
+function safeError(error, context) {
+  if (error.code === "auth/network-request-failed") {
     return "Koneksi gagal. Periksa internet Anda.";
   }
-  if (code === "auth/too-many-requests") {
+
+  if (error.code === "auth/too-many-requests") {
     return "Terlalu banyak percobaan. Coba lagi nanti.";
   }
+
   if (context === "signin") {
-    // Sama untuk email tidak ada, password salah, dan akun nonaktif.
     return "Email atau password salah (incorrect email or password).";
   }
+
   if (context === "signup") {
-    // Tidak mengungkap apakah email telah terdaftar.
-    return "Pendaftaran tidak dapat diselesaikan. Coba masuk atau gunakan email lain.";
+    return "Pendaftaran belum berhasil. Coba masuk atau gunakan email lain.";
   }
+
   if (context === "sms") {
-    return "SMS tidak dapat dikirim. Periksa nomor, reCAPTCHA, atau coba lagi nanti.";
+    return "SMS belum dapat dikirim. Periksa nomor dan reCAPTCHA.";
   }
+
   if (context === "otp") {
-    return "Kode tidak valid atau kedaluwarsa. Coba lagi atau minta kode baru.";
+    return "Kode salah atau kedaluwarsa. Coba lagi atau minta kode baru.";
   }
-  return "Permintaan tidak dapat diselesaikan. Coba lagi nanti.";
+
+  return "Permintaan belum berhasil. Coba lagi nanti.";
 }
 
 async function run(element, operation, context) {
-  const buttons = [...element.querySelectorAll("button")];
-  if (element.matches("button")) buttons.push(element);
-  buttons.forEach(button => { button.disabled = true; });
+  const buttons = element.matches("button")
+    ? [element]
+    : [...element.querySelectorAll("button")];
+
+  buttons.forEach(button => {
+    button.disabled = true;
+  });
 
   try {
     await operation();
   } catch (error) {
     message(safeError(error, context));
   } finally {
-    buttons.forEach(button => { button.disabled = false; });
+    buttons.forEach(button => {
+      button.disabled = false;
+    });
   }
 }
 
@@ -79,256 +114,476 @@ function resetCaptcha() {
 function renderAccount(user) {
   $("guest").hidden = Boolean(user);
   $("account").hidden = !user;
+  $("welcome").hidden = Boolean(user);
   $("result").textContent = "";
 
-  if (!user) return;
+  document.querySelector("main").classList.toggle(
+    "dashboard-mode",
+    Boolean(user)
+  );
 
-  $("identity").textContent = user.email || user.phoneNumber || user.uid;
-  $("verified").textContent = user.email
-    ? user.emailVerified ? "Email sudah diverifikasi." : "Email belum diverifikasi."
-    : "Masuk menggunakan nomor telepon.";
+  if (!user) {
+    $("dashboard").hidden = true;
+    $("verification-panel").hidden = true;
+    showPanel("signin");
+    return;
+  }
+
+  const phoneLogin =
+    !user.email &&
+    user.providerData.some(
+      provider => provider.providerId === "phone"
+    );
+
+  const verified = user.emailVerified || phoneLogin;
+  const contact = user.email || user.phoneNumber || "Pengguna";
+
+  $("identity").textContent = contact;
+  $("profile-contact").textContent = contact;
+
+  $("verified").textContent = verified
+    ? "✓ Terverifikasi"
+    : "Menunggu verifikasi email";
+
+  $("verification-description").textContent = phoneLogin
+    ? "Anda masuk menggunakan nomor telepon."
+    : "Alamat email Anda sudah diverifikasi.";
+
+  $("verification-panel").hidden = verified;
+  $("dashboard").hidden = !verified;
 
   $("resend").hidden = !user.email || user.emailVerified;
   $("refresh").hidden = !user.email || user.emailVerified;
 }
 
-document.querySelectorAll("[data-panel]").forEach(button => {
-  button.addEventListener("click", () => {
-    for (const id of ["signin", "signup", "phone"]) {
-      $(id).hidden = id !== button.dataset.panel;
-    }
-    message("Silakan lengkapi formulir.");
-  });
-});
+let resendTimer;
 
-$("new-password").addEventListener("input", event => {
-  const result = passwordCheck(event.target.value);
-  $("meter").value = result.score;
-  $("strength").textContent = result.label;
-});
+function startResendCountdown() {
+  clearInterval(resendTimer);
 
-$("signin").addEventListener("submit", event => {
-  event.preventDefault();
-  const form = event.currentTarget;
+  const button = document.getElementById("resend");
 
-  run(form, async () => {
-    const data = new FormData(form);
-    await signInWithEmailAndPassword(
-      auth,
-      data.get("email").trim(),
-      data.get("password")
+  function update() {
+    const remaining = Math.max(
+      0,
+      Math.ceil((emailReadyAt - Date.now()) / 1000)
     );
-    form.reset();
-    message("Berhasil masuk.");
-  }, "signin");
-});
-
-$("signup").addEventListener("submit", event => {
-  event.preventDefault();
-  const form = event.currentTarget;
-
-  run(form, async () => {
-    const data = new FormData(form);
-    const password = data.get("password");
-
-    if (!passwordCheck(password).valid) {
-      message("Password belum memenuhi aturan.");
-      return;
-    }
-    if (password !== data.get("confirm")) {
-      message("Konfirmasi password tidak cocok.");
-      return;
-    }
-
-    // Memeriksa kebijakan yang dikonfigurasi pada proyek Firebase.
-    const policy = await validatePassword(auth, password);
-    if (!policy.isValid) {
-      message("Password tidak memenuhi kebijakan Firebase.");
-      return;
-    }
-
-    const { user } = await createUserWithEmailAndPassword(
-      auth,
-      data.get("email").trim(),
-      password
-    );
-
-    form.reset();
-
-    try {
-       await sendEmailVerification(user);
-
-      localStorage.setItem(
-      `verifyEmailNextAt:${user.uid}`,
-      String(Date.now() + 60_000)
-    );
-
-      message("Akun dibuat. Buka email verifikasi, lalu klik “Saya sudah verifikasi”.");
-    } catch {
-      message("Akun dibuat, tetapi email belum terkirim. Gunakan tombol kirim email verifikasi.");
-    }
-  }, "signup");
-});
-
-$("resend").addEventListener("click", event => {
-  run(event.currentTarget, async () => {
-    const user = auth.currentUser;
-
-    if (!user) {
-      message("Anda belum masuk.");
-      return;
-    }
-
-    const key = `verifyEmailNextAt:${user.uid}`;
-    const nextAt = Number(localStorage.getItem(key) || 0);
-    const remaining = Math.ceil((nextAt - Date.now()) / 1000);
 
     if (remaining > 0) {
-      message(`Tunggu ${remaining} detik sebelum mengirim ulang.`);
-      return;
+      button.disabled = true;
+      button.textContent =
+        "Kirim ulang dalam " + remaining + " detik";
+    } else {
+      button.disabled = false;
+      button.textContent = "Verifikasi email lagi";
+      clearInterval(resendTimer);
     }
+  }
 
-    try {
-      await sendEmailVerification(user);
-      localStorage.setItem(key, String(Date.now() + 60_000));
-      message("Email verifikasi dikirim. Periksa juga folder spam.");
-    } catch (error) {
-      console.error("Kode error:", error.code);
-      console.error("Pesan error:", error.message);
-      message("Email gagal dikirim. Periksa Console untuk detail error.");
-    }
-  }, "verification");
-});
+  update();
 
-$("refresh").addEventListener("click", event => {
-  run(event.currentTarget, async () => {
-    const user = auth.currentUser;
-    if (!user) return;
+  if (emailReadyAt > Date.now()) {
+    resendTimer = setInterval(update, 1000);
+  }
+}
 
-    await reload(user);
-    await user.getIdToken(true);
-    renderAccount(user);
-    message(user.emailVerified
-      ? "Email sudah diverifikasi."
-      : "Email belum diverifikasi. Buka tautan pada email.");
-  }, "verification");
-});
-
-$("send-sms").addEventListener("submit", event => {
-  event.preventDefault();
-  const form = event.currentTarget;
-
-  run(form, async () => {
-    if (Date.now() < smsReadyAt) {
-      message("Tunggu 60 detik sebelum meminta kode baru.");
-      return;
-    }
-
-    const data = new FormData(form);
-    const phone = data.get("phone").trim();
-
-    if (!/^\+[1-9]\d{7,14}$/.test(phone) || !data.get("consent")) {
-      message("Gunakan nomor format internasional dan setujui pengiriman SMS.");
-      return;
-    }
-
-    // Kode lama tidak dipakai setelah permintaan baru dimulai.
-    confirmation = undefined;
-    $("confirm-sms").hidden = true;
-    resetCaptcha();
-
-    verifier = new RecaptchaVerifier(auth, "recaptcha", {
-      size: "normal"
+function bindEvents() {
+  document.querySelectorAll("[data-panel]").forEach(button => {
+    button.addEventListener("click", () => {
+      showPanel(button.dataset.panel);
+      message("Silakan lengkapi formulir.");
     });
+  });
 
-    try {
-      await verifier.render();
-      confirmation = await signInWithPhoneNumber(auth, phone, verifier);
-      smsReadyAt = Date.now() + 60_000;
-      $("confirm-sms").hidden = false;
-      message("Kode SMS dikirim. Masukkan enam digit kode.");
-    } finally {
+  $("new-password").addEventListener("input", event => {
+    const value = event.target.value;
+    const result = passwordCheck(value);
+
+    $("password-meter").value = result.score;
+
+    $("password-strength").textContent = !value
+      ? "Belum diisi"
+      : result.valid
+        ? "Memenuhi aturan password"
+        : "Password belum memenuhi semua aturan";
+  });
+
+  // MASUK → DASHBOARD ATAU PANEL VERIFIKASI
+  $("signin").addEventListener("submit", event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+
+    run(form, async () => {
+      const data = new FormData(form);
+
+      const { user } = await signInWithEmailAndPassword(
+        auth,
+        data.get("email").trim(),
+        data.get("password")
+      );
+
+      renderAccount(user);
+      form.reset();
+
+      message(user.emailVerified
+        ? "Selamat datang di Ruang Akun."
+        : "Verifikasi email untuk membuka dashboard.");
+    }, "signin");
+  });
+
+  // DAFTAR
+  $("signup").addEventListener("submit", event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+
+    run(form, async () => {
+      const data = new FormData(form);
+      const password = data.get("password");
+
+      if (!passwordCheck(password).valid) {
+        message("Password belum memenuhi aturan.");
+        return;
+      }
+
+      if (password !== data.get("confirm")) {
+        message("Konfirmasi password tidak cocok.");
+        return;
+      }
+
+      const policy = await validatePassword(auth, password);
+
+      if (!policy.isValid) {
+        message("Password tidak memenuhi kebijakan Firebase.");
+        return;
+      }
+
+      const { user } = await createUserWithEmailAndPassword(
+        auth,
+        data.get("email").trim(),
+        password
+      );
+
+      form.reset();
+      $("password-meter").value = 0;
+      $("password-strength").textContent = "Belum diisi";
+
+      renderAccount(user);
+
+      try {
+        await sendEmailVerification(user);
+        emailReadyAt = Date.now() + 60000;
+
+        message(
+          "Akun dibuat. Buka email verifikasi, lalu klik " +
+          "“Saya sudah verifikasi”."
+        );
+      } catch {
+        message(
+          "Akun dibuat, tetapi email belum terkirim. " +
+          "Gunakan tombol kirim email verifikasi."
+        );
+      }
+    }, "signup");
+  });
+
+  // KIRIM ULANG EMAIL VERIFIKASI
+  $("resend").addEventListener("click", async () => {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const button = $("resend");
+
+  if (Date.now() < emailReadyAt) {
+    startResendCountdown();
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "Mengirim…";
+
+  try {
+    await sendEmailVerification(user);
+
+    // Mulai masa tunggu setelah pengiriman berhasil.
+    emailReadyAt = Date.now() + 60000;
+
+    message("Email verifikasi dikirim. Periksa juga folder spam.");
+  } catch (error) {
+    console.error("Pengiriman verifikasi gagal:", error.code);
+    message(safeError(error, "verification"));
+  } finally {
+    // Fungsi ini mengatur teks sekaligus status tombol.
+    startResendCountdown();
+  }
+});
+
+  // PERIKSA VERIFIKASI → BUKA DASHBOARD
+  $("refresh").addEventListener("click", event => {
+    run(event.currentTarget, async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      await reload(user);
+      await user.getIdToken(true);
+
+      renderAccount(user);
+
+      message(user.emailVerified
+        ? "Email terverifikasi. Selamat datang di dashboard!"
+        : "Email belum diverifikasi. Buka tautan di email Anda.");
+    }, "verification");
+  });
+
+  // BUKA FORM RESET PASSWORD
+  $("forgot-password").addEventListener("click", () => {
+    showPanel("reset-password");
+    message("Masukkan email untuk reset password.");
+  });
+
+  $("back-to-signin").addEventListener("click", () => {
+    showPanel("signin");
+    message("Silakan masuk.");
+  });
+
+  // KIRIM EMAIL RESET PASSWORD
+  $("reset-password").addEventListener("submit", event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+
+    run(form, async () => {
+      if (Date.now() < resetReadyAt) {
+        message("Tunggu 60 detik sebelum meminta tautan lagi.");
+        return;
+      }
+
+      const email = new FormData(form).get("email").trim();
+
+      try {
+        await sendPasswordResetEmail(auth, email);
+      } catch (error) {
+        // Respons sama untuk email yang tidak terdaftar.
+        if (error.code !== "auth/user-not-found") {
+          throw error;
+        }
+      }
+
+      resetReadyAt = Date.now() + 60000;
+      form.reset();
+
+      message(
+        "Jika email tersebut terdaftar, tautan reset password " +
+        "akan dikirim. Periksa juga folder spam."
+      );
+    }, "reset");
+  });
+
+  // KIRIM SMS
+  $("send-sms").addEventListener("submit", event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+
+    run(form, async () => {
+      if (Date.now() < smsReadyAt) {
+        message("Tunggu 60 detik sebelum meminta kode baru.");
+        return;
+      }
+
+      const data = new FormData(form);
+      const phone = data.get("phone").trim();
+
+      if (
+        !/^\+[1-9]\d{7,14}$/.test(phone) ||
+        !data.get("consent")
+      ) {
+        message("Periksa nomor internasional dan persetujuan SMS.");
+        return;
+      }
+
+      confirmation = undefined;
+      $("confirm-sms").hidden = true;
       resetCaptcha();
-    }
-  }, "sms");
-});
 
-$("confirm-sms").addEventListener("submit", event => {
-  event.preventDefault();
-  const form = event.currentTarget;
+      verifier = new RecaptchaVerifier(auth, "recaptcha", {
+        size: "normal"
+      });
 
-  run(form, async () => {
-    if (!confirmation) {
-      message("Minta kode SMS terlebih dahulu.");
-      return;
-    }
+      try {
+        await verifier.render();
 
-    const code = new FormData(form).get("code").trim();
-    if (!/^\d{6}$/.test(code)) {
-      message("Masukkan enam digit kode.");
-      return;
-    }
+        confirmation = await signInWithPhoneNumber(
+          auth,
+          phone,
+          verifier
+        );
 
-    await confirmation.confirm(code);
-    confirmation = undefined;
-    form.reset();
-    $("confirm-sms").hidden = true;
-    message("Berhasil masuk dengan nomor telepon.");
-  }, "otp");
-});
+        smsReadyAt = Date.now() + 60000;
+        $("confirm-sms").hidden = false;
+        message("Kode SMS dikirim. Masukkan enam digit kode.");
+      } finally {
+        resetCaptcha();
+      }
+    }, "sms");
+  });
 
-$("private").addEventListener("click", event => {
-  run(event.currentTarget, async () => {
-    const user = auth.currentUser;
-    if (!user) return;
+  // VERIFIKASI SMS
+  $("confirm-sms").addEventListener("submit", event => {
+    event.preventDefault();
+    const form = event.currentTarget;
 
-    // Token berada dalam memori; tidak ditampilkan atau dicatat.
-    const token = await user.getIdToken();
-    const response = await fetch("/api/private", {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store"
-    });
+    run(form, async () => {
+      if (!confirmation) {
+        message("Minta kode SMS terlebih dahulu.");
+        return;
+      }
 
-    const data = await response.json();
+      const code = new FormData(form).get("code").trim();
 
-    if (!response.ok) {
-      message(data.error || "API tidak dapat diakses.");
-      return;
-    }
+      if (!/^\d{6}$/.test(code)) {
+        message("Masukkan enam digit kode.");
+        return;
+      }
 
-    $("result").textContent = JSON.stringify(data, null, 2);
-    message("API menerima identitas terverifikasi Anda.");
-  }, "api");
-});
+      const { user } = await confirmation.confirm(code);
 
-$("logout").addEventListener("click", event => {
-  run(event.currentTarget, async () => {
-    await signOut(auth);
-    confirmation = undefined;
-    resetCaptcha();
-    $("confirm-sms").hidden = true;
-    message("Anda sudah keluar.");
-  }, "logout");
-});
+      confirmation = undefined;
+      form.reset();
+      $("confirm-sms").hidden = true;
+
+      renderAccount(user);
+      message("Selamat datang di Ruang Akun.");
+    }, "otp");
+  });
+
+  // AKSES API BACKEND
+  $("private").addEventListener("click", event => {
+    run(event.currentTarget, async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const token = await user.getIdToken();
+
+      const response = await fetch("/api/private", {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        cache: "no-store"
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        message(data.error || "Akses ditolak.");
+        return;
+      }
+
+      $("result").textContent = JSON.stringify(data, null, 2);
+      message("Server menerima sesi Anda.");
+    }, "api");
+  });
+
+  // KELUAR → KEMBALI KE FORM MASUK
+  $("logout").addEventListener("click", event => {
+    run(event.currentTarget, async () => {
+      await signOut(auth);
+
+      confirmation = undefined;
+      resetCaptcha();
+
+      $("confirm-sms").hidden = true;
+
+      for (const id of [
+        "signin",
+        "signup",
+        "reset-password",
+        "send-sms",
+        "confirm-sms"
+      ]) {
+        $(id).reset();
+      }
+
+      $("password-meter").value = 0;
+      $("password-strength").textContent = "Belum diisi";
+
+      renderAccount(null);
+      message("Anda sudah keluar.");
+    }, "logout");
+  });
+}
 
 async function initialize() {
   try {
-    const response = await fetch("/api/config", { cache: "no-store" });
-    if (!response.ok) throw new Error("Config unavailable");
+    const response = await fetch("/api/config", {
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      throw new Error("Konfigurasi tidak tersedia.");
+    }
 
     const config = await response.json();
+
     auth = getAuth(initializeApp(config));
     auth.languageCode = "id";
 
     await setPersistence(auth, browserSessionPersistence);
 
+    function startResendCountdown() {
+    clearInterval(resendTimer);
+
+  const button = document.getElementById("resend");
+
+  function updateCountdown() {
+    const remaining = Math.max(
+      0,
+      Math.ceil((emailReadyAt - Date.now()) / 1000)
+    );
+
+    button.disabled = remaining > 0;
+
+    button.textContent = remaining > 0
+      ? "Kirim ulang dalam " + remaining + " detik"
+      : "Kirim email verifikasi";
+
+    if (remaining === 0) {
+      clearInterval(resendTimer);
+    }
+  }
+
+  updateCountdown();
+
+  if (emailReadyAt > Date.now()) {
+    resendTimer = setInterval(updateCountdown, 1000);
+  }
+}
+
+async function initialize() {
+
+}
+
+initialize();
+
+  bindEvents();
+
     onAuthStateChanged(auth, user => {
       renderAccount(user);
-    });
 
-    message("Silakan masuk atau buat akun.");
-  } catch {
-    message("Aplikasi belum siap. Periksa konfigurasi Firebase dan koneksi internet.");
+      if (!user) {
+        message("Silakan masuk atau buat akun.");
+      } else if (user.email && !user.emailVerified) {
+        message("Verifikasi email untuk membuka dashboard.");
+      } else {
+        message("Selamat datang di Ruang Akun.");
+      }
+    }, () => {
+      message("Sesi tidak dapat dimuat. Muat ulang halaman.");
+    });
+  } catch (error) {
+    console.error("Aplikasi gagal dimuat:", error);
+
+    message(
+      "Aplikasi belum siap. Periksa konfigurasi Firebase " +
+      "atau error pada Console browser."
+    );
   }
 }
 

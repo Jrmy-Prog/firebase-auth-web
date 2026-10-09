@@ -1,4 +1,4 @@
-<!DOCTYPE HTML>
+<!doctype html>
 <html lang="id">
 <head>
   <meta charset="utf-8">
@@ -11,16 +11,17 @@
 
 <body>
   <main>
-    <header>
+    <header id="welcome">
       <span class="brand">RUANG AKUN</span>
       <h1>Selamat datang.</h1>
-      <p>Masuk dan kelola verifikasi akun Anda.</p>
+      <p>Masuk untuk mengelola akun Anda.</p>
     </header>
 
     <p id="message" role="status" aria-live="polite">
-      Memuat konfigurasi…
+      Memuat aplikasi…
     </p>
 
+    <!-- SEBELUM LOGIN -->
     <section id="guest" hidden>
       <nav aria-label="Metode autentikasi">
         <button type="button" data-panel="signin">Masuk</button>
@@ -28,7 +29,6 @@
         <button type="button" data-panel="phone">Nomor telepon</button>
       </nav>
 
-      <!-- Masuk menggunakan email dan password -->
       <form id="signin">
         <h2>Masuk ke akun</h2>
 
@@ -49,15 +49,43 @@
             name="password"
             type="password"
             autocomplete="current-password"
-            maxlength="4096"
             required
           >
         </label>
 
-        <button type="submit">Masuk</button>
+        <div class="actions">
+          <button type="submit">Masuk</button>
+
+          <button id="forgot-password" type="button" class="secondary">
+            Lupa password?
+          </button>
+        </div>
       </form>
 
-      <!-- Pendaftaran akun email -->
+      <form id="reset-password" hidden>
+        <h2>Reset password</h2>
+        <p>Masukkan email yang digunakan saat mendaftar.</p>
+
+        <label>
+          Alamat email
+          <input
+            name="email"
+            type="email"
+            autocomplete="email"
+            maxlength="254"
+            required
+          >
+        </label>
+
+        <div class="actions">
+          <button type="submit">Kirim link reset password</button>
+
+          <button id="back-to-signin" type="button" class="secondary">
+            Kembali
+          </button>
+        </div>
+      </form>
+
       <form id="signup" hidden>
         <h2>Buat akun baru</h2>
 
@@ -81,25 +109,24 @@
             autocomplete="new-password"
             minlength="12"
             maxlength="128"
-            aria-describedby="rules strength"
+            aria-describedby="password-rules password-strength"
             required
           >
         </label>
 
-        <p id="rules">
+        <p id="password-rules" class="small">
           12–128 karakter, huruf besar, huruf kecil, angka, dan simbol.
-          Gunakan password unik yang panjang.
         </p>
 
         <meter
-          id="meter"
+          id="password-meter"
           min="0"
           max="5"
           value="0"
           aria-label="Indikator password"
         ></meter>
 
-        <p id="strength">Belum diisi</p>
+        <p id="password-strength" class="small">Belum diisi</p>
 
         <label>
           Ulangi password
@@ -115,7 +142,6 @@
         <button type="submit">Daftar</button>
       </form>
 
-      <!-- Masuk menggunakan nomor telepon -->
       <section id="phone" hidden>
         <h2>Masuk dengan SMS</h2>
 
@@ -161,48 +187,113 @@
           <button type="submit">Verifikasi dan masuk</button>
         </form>
 
-        <p>
-          Login telepon membuat atau membuka akun telepon.
-          Fitur ini bukan MFA atau pengaitan nomor ke akun email.
+        <p class="small">
+          Login telepon adalah akun terpisah, bukan pengaitan nomor
+          atau MFA untuk akun email.
         </p>
       </section>
     </section>
 
-    <!-- Ditampilkan setelah pengguna masuk -->
+    <!-- SETELAH LOGIN -->
     <section id="account" hidden>
-      <h2>Akun Anda</h2>
+      <div class="account-header">
+        <div>
+          <span class="brand">RUANG AKUN</span>
+          <h2>Dashboard saya</h2>
+        </div>
 
-      <p id="identity"></p>
-      <p id="verified"></p>
-
-      <div class="actions">
-        <button id="resend" type="button">
-          Kirim email verifikasi
-        </button>
-
-        <button id="refresh" type="button">
-          Saya sudah verifikasi
-        </button>
-
-        <button id="private" type="button">
-          Akses API terlindungi
-        </button>
-
-        <button id="logout" type="button">
+        <button id="logout" type="button" class="secondary">
           Keluar
         </button>
       </div>
 
-      <pre id="result"></pre>
+      <div class="profile-card">
+        <div class="avatar" aria-hidden="true">RA</div>
+
+        <div>
+          <h3>Akun saya</h3>
+          <p id="identity"></p>
+          <span id="verified" class="badge"></span>
+        </div>
+      </div>
+
+      <div id="verification-panel" class="notice" hidden>
+        <h3>Verifikasi email Anda</h3>
+        <p>
+          Buka tautan verifikasi di email, lalu klik
+          “Saya sudah verifikasi”.
+        </p>
+
+        <div class="actions">
+          <button id="resend" type="button">
+            Kirim email verifikasi
+          </button>
+
+          <button id="refresh" type="button" class="secondary">
+            Saya sudah verifikasi
+          </button>
+        </div>
+      </div>
+
+      <div id="dashboard" hidden>
+        <div class="banner">
+          <span>AKUN TERVERIFIKASI</span>
+          <h3>Selamat datang kembali!</h3>
+          <p>Kelola profil dan keamanan akun Anda.</p>
+        </div>
+
+        <div class="grid">
+          <article class="card">
+            <span class="card-label">PROFIL</span>
+            <h3>Identitas akun</h3>
+            <p>Email atau nomor telepon untuk masuk.</p>
+            <strong id="profile-contact"></strong>
+          </article>
+
+          <article class="card">
+            <span class="card-label">KEAMANAN</span>
+            <h3>Status verifikasi</h3>
+            <p id="verification-description"></p>
+            <span class="badge">Identitas terverifikasi</span>
+          </article>
+
+          <article class="card">
+            <span class="card-label">AKSES</span>
+            <h3>Koneksi server</h3>
+            <p>Periksa apakah sesi Anda diterima backend.</p>
+
+            <button id="private" type="button">
+              Periksa akses
+            </button>
+          </article>
+
+          <article class="card">
+            <span class="card-label">PANDUAN</span>
+            <h3>Lindungi akun Anda</h3>
+            <p>
+              Jangan bagikan password, kode SMS, atau tautan
+              reset password kepada orang lain.
+            </p>
+          </article>
+        </div>
+
+        <details>
+          <summary>Cara mengganti password</summary>
+          <p>
+            Untuk akun email dan password, keluar lalu pilih
+            “Lupa password?”. Ikuti tautan yang dikirim ke email.
+          </p>
+        </details>
+
+        <pre id="result" aria-live="polite"></pre>
+      </div>
     </section>
 
     <noscript>
-      <p>Aktifkan JavaScript di browser untuk menggunakan aplikasi.</p>
+      <p>Aktifkan JavaScript untuk menggunakan aplikasi.</p>
     </noscript>
 
-    <footer>
-      Password dan kode SMS diproses langsung oleh Firebase.
-    </footer>
+    <footer>Password dan kode SMS diproses langsung oleh Firebase.</footer>
   </main>
 </body>
 </html>
