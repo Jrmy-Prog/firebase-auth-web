@@ -103,7 +103,7 @@ app.use("/api", rateLimit({
   limit: 60,
   standardHeaders: "draft-8",
   legacyHeaders: false,
-  message: { error: "Terlalu banyak permintaan. Coba lagi nanti." }
+  message: { error: "Too many requests. Try again later." }
 }));
 
 app.get(

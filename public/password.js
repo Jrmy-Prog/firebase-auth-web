@@ -14,7 +14,7 @@ export function passwordCheck(value) {
     valid,
     score,
     label: !value
-      ? "Belum diisi"
+      ? "Please fill the password"
       : valid
         ? "Memenuhi aturan"
         : score < 3

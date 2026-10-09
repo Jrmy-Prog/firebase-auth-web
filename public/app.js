@@ -59,30 +59,30 @@ function passwordCheck(value) {
 
 function safeError(error, context) {
   if (error.code === "auth/network-request-failed") {
-    return "Koneksi gagal. Periksa internet Anda.";
+    return "Connection failed. Check your internet connection.";
   }
 
   if (error.code === "auth/too-many-requests") {
-    return "Terlalu banyak percobaan. Coba lagi nanti.";
+    return "Too many attempts. Try again later.";
   }
 
   if (context === "signin") {
-    return "Email atau password salah (incorrect email or password).";
+    return "Incorrect email or password.";
   }
 
   if (context === "signup") {
-    return "Pendaftaran belum berhasil. Coba masuk atau gunakan email lain.";
+    return "Registration was unsuccessful. Try log in using a different email.";
   }
 
   if (context === "sms") {
-    return "SMS belum dapat dikirim. Periksa nomor dan reCAPTCHA.";
+    return "The SMS could not be sent. Check the number and reCAPTCHA.";
   }
 
   if (context === "otp") {
-    return "Kode salah atau kedaluwarsa. Coba lagi atau minta kode baru.";
+    return "The code is expired. Try again or request a new code.";
   }
 
-  return "Permintaan belum berhasil. Coba lagi nanti.";
+  return "The request was unsuccessful. Please try again later.";
 }
 
 async function run(element, operation, context) {
@@ -144,7 +144,7 @@ function renderAccount(user) {
 
   $("verified").textContent = verified
     ? "✓ Terverifikasi"
-    : "Menunggu verifikasi email";
+    : "Waiting for email verification...";
 
   $("verification-description").textContent = phoneLogin
     ? "Anda masuk menggunakan nomor telepon."
@@ -173,10 +173,10 @@ function startResendCountdown() {
     if (remaining > 0) {
       button.disabled = true;
       button.textContent =
-        "Kirim ulang dalam " + remaining + " detik";
+        "Resend in " + remaining + " seconds";
     } else {
       button.disabled = false;
-      button.textContent = "Verifikasi email lagi";
+      button.textContent = "";
       clearInterval(resendTimer);
     }
   }
@@ -192,7 +192,7 @@ function bindEvents() {
   document.querySelectorAll("[data-panel]").forEach(button => {
     button.addEventListener("click", () => {
       showPanel(button.dataset.panel);
-      message("Silakan lengkapi formulir.");
+      message("Please fill out the form.");
     });
   });
 
@@ -203,10 +203,10 @@ function bindEvents() {
     $("password-meter").value = result.score;
 
     $("password-strength").textContent = !value
-      ? "Belum diisi"
+      ? "Please fill the password"
       : result.valid
-        ? "Memenuhi aturan password"
-        : "Password belum memenuhi semua aturan";
+        ? ""
+        : "The password does not yet meet all the requirements.";
   });
 
   // MASUK → DASHBOARD ATAU PANEL VERIFIKASI
@@ -227,8 +227,8 @@ function bindEvents() {
       form.reset();
 
       message(user.emailVerified
-        ? "Selamat datang di Ruang Akun."
-        : "Verifikasi email untuk membuka dashboard.");
+        ? "Welcome to the Ruang Akun."
+        : "Verify your email to access the dashboard.");
     }, "signin");
   });
 
@@ -242,19 +242,19 @@ function bindEvents() {
       const password = data.get("password");
 
       if (!passwordCheck(password).valid) {
-        message("Password belum memenuhi aturan.");
+        message("The password does not meet the requirements.");
         return;
       }
 
       if (password !== data.get("confirm")) {
-        message("Konfirmasi password tidak cocok.");
+        message("Password confirmation does not match.");
         return;
       }
 
       const policy = await validatePassword(auth, password);
 
       if (!policy.isValid) {
-        message("Password tidak memenuhi kebijakan Firebase.");
+        message("The password does not meet the Firebase policy.");
         return;
       }
 
@@ -266,7 +266,7 @@ function bindEvents() {
 
       form.reset();
       $("password-meter").value = 0;
-      $("password-strength").textContent = "Belum diisi";
+      $("password-strength").textContent = "Not yet filled in";
 
       renderAccount(user);
 
@@ -275,13 +275,13 @@ function bindEvents() {
         emailReadyAt = Date.now() + 60000;
 
         message(
-          "Akun dibuat. Buka email verifikasi, lalu klik " +
-          "“Saya sudah verifikasi”."
+          "Account created. Open the verification email, then click. " +
+          "“I have verified”."
         );
       } catch {
         message(
-          "Akun dibuat, tetapi email belum terkirim. " +
-          "Gunakan tombol kirim email verifikasi."
+          "The account was created, but the email has not been sent. " +
+          "Use the button to send the verification email."
         );
       }
     }, "signup");
@@ -300,7 +300,7 @@ function bindEvents() {
   }
 
   button.disabled = true;
-  button.textContent = "Mengirim…";
+  button.textContent = "Sending...";
 
   try {
     await sendEmailVerification(user);
@@ -308,9 +308,9 @@ function bindEvents() {
     // Mulai masa tunggu setelah pengiriman berhasil.
     emailReadyAt = Date.now() + 60000;
 
-    message("Email verifikasi dikirim. Periksa juga folder spam.");
+    message("A verification email has been sent. Please also check your spam folder.");
   } catch (error) {
-    console.error("Pengiriman verifikasi gagal:", error.code);
+    console.error("Failed to send verification code. Please try again.:", error.code);
     message(safeError(error, "verification"));
   } finally {
     // Fungsi ini mengatur teks sekaligus status tombol.
@@ -330,20 +330,20 @@ function bindEvents() {
       renderAccount(user);
 
       message(user.emailVerified
-        ? "Email terverifikasi. Selamat datang di dashboard!"
-        : "Email belum diverifikasi. Buka tautan di email Anda.");
+        ? "Email verified. Welcome to the dashboard!"
+        : "Email not yet verified. Open the link in your email.");
     }, "verification");
   });
 
   // BUKA FORM RESET PASSWORD
   $("forgot-password").addEventListener("click", () => {
     showPanel("reset-password");
-    message("Masukkan email untuk reset password.");
+    message("Enter your email to reset your password.");
   });
 
   $("back-to-signin").addEventListener("click", () => {
     showPanel("signin");
-    message("Silakan masuk.");
+    message("Please come in");
   });
 
   // KIRIM EMAIL RESET PASSWORD
@@ -372,8 +372,8 @@ function bindEvents() {
       form.reset();
 
       message(
-        "Jika email tersebut terdaftar, tautan reset password " +
-        "akan dikirim. Periksa juga folder spam."
+        "If the email is registered, a password reset link..." +
+        "It will be sent. Please also check your spam folder."
       );
     }, "reset");
   });
@@ -419,7 +419,7 @@ function bindEvents() {
 
         smsReadyAt = Date.now() + 60000;
         $("confirm-sms").hidden = false;
-        message("Kode SMS dikirim. Masukkan enam digit kode.");
+        message("SMS code sent. Enter the six-digit code.");
       } finally {
         resetCaptcha();
       }
@@ -503,10 +503,10 @@ function bindEvents() {
       }
 
       $("password-meter").value = 0;
-      $("password-strength").textContent = "Belum diisi";
+      $("password-strength").textContent = "Please fill the password";
 
       renderAccount(null);
-      message("Anda sudah keluar.");
+      message("You have logged out.");
     }, "logout");
   });
 }
@@ -518,13 +518,13 @@ async function initialize() {
     });
 
     if (!response.ok) {
-      throw new Error("Konfigurasi tidak tersedia.");
+      throw new Error("Configuration is not available.");
     }
 
     const config = await response.json();
 
     auth = getAuth(initializeApp(config));
-    auth.languageCode = "id";
+    auth.languageCode = "en";
 
     await setPersistence(auth, browserSessionPersistence);
 
@@ -542,8 +542,8 @@ async function initialize() {
     button.disabled = remaining > 0;
 
     button.textContent = remaining > 0
-      ? "Kirim ulang dalam " + remaining + " detik"
-      : "Kirim email verifikasi";
+      ? "Resend in " + remaining + " Seconds"
+      : "Send verification email again";
 
     if (remaining === 0) {
       clearInterval(resendTimer);
@@ -569,11 +569,11 @@ initialize();
       renderAccount(user);
 
       if (!user) {
-        message("Silakan masuk atau buat akun.");
+        message("Please log in or create an account.");
       } else if (user.email && !user.emailVerified) {
-        message("Verifikasi email untuk membuka dashboard.");
+        message("Verify your email to access the dashboard.");
       } else {
-        message("Selamat datang di Ruang Akun.");
+        message("Verify your email to access the dashboard.");
       }
     }, () => {
       message("Sesi tidak dapat dimuat. Muat ulang halaman.");
