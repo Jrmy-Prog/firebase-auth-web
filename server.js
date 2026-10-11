@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
+import { createEmailPasscodeRouter } from "./email-passcode.js";
 import {
   initializeApp,
   applicationDefault,
@@ -50,6 +51,9 @@ initializeApp({
 });
 
 const app = express();
+app.use(express.json({ limit: "10kb" }));
+app.use("/api/email-passcode", createEmailPasscodeRouter());
+
 app.disable("x-powered-by");
 
 const proxyCount = Number(process.env.TRUST_PROXY || 0);

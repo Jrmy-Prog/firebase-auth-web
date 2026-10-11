@@ -63,6 +63,45 @@
         </div>
       </form>
 
+      <details>
+  <summary>Sign in with an email passcode</summary>
+
+  <form id="email-passcode-request">
+    <label>
+      Email address
+      <input
+        name="email"
+        type="email"
+        autocomplete="email"
+        maxlength="254"
+        required
+      >
+    </label>
+
+    <button type="submit">Send passcode</button>
+  </form>
+
+  <form id="email-passcode-verify" hidden>
+    <label>
+      Passcode
+      <input
+        name="code"
+        type="text"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        pattern="[0-9]{6}"
+        minlength="6"
+        maxlength="6"
+        required
+      >
+    </label>
+
+    <button type="submit">Verify and sign in</button>
+  </form>
+
+  <p id="email-passcode-status" role="status"></p>
+</details>
+
       <form id="reset-password" hidden>
         <h2>Reset password</h2>
         <p>Enter the email address used during registration.</p>
@@ -124,11 +163,12 @@
           min="0"
           max="5"
           value="0"
-          aria-label="Indikator password"
+          aria-label="Password requirements indicator"
         ></meter>
 
-        <p id="password-strength" class="small"></p>
-
+        <p id="password-strength" aria-live="polite">
+        Enter a password
+        </p>  
         <label>
           Confirm password
           <input

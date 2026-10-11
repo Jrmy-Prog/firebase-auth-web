@@ -33,7 +33,7 @@ export function requireVerifiedIdentity(req, res, next) {
 
   if (!verifiedEmail && !verifiedPhone) {
     return res.status(403).json({
-      error: "Verifikasi email terlebih dahulu."
+      error: "Verify your email first."
     });
   }
 

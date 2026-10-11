@@ -1,6 +1,6 @@
+import { passwordCheck } from "./password.js";
 import { initializeApp } from
   "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-
 import {
   getAuth,
   setPersistence,
@@ -14,6 +14,7 @@ import {
   reload,
   validatePassword,
   RecaptchaVerifier,
+  signInWithCustomToken,
   signInWithPhoneNumber
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 
@@ -41,22 +42,6 @@ function showPanel(selected) {
     $(id).hidden = id !== selected;
   }
 }
-
-function passwordCheck(value) {
-  const checks = [
-    value.length >= 12,
-    /[a-z]/.test(value),
-    /[A-Z]/.test(value),
-    /[0-9]/.test(value),
-    /[^A-Za-z0-9]/.test(value)
-  ];
-
-  return {
-    valid: checks.every(Boolean) && value.length <= 128,
-    score: checks.filter(Boolean).length
-  };
-}
-
 function safeError(error, context) {
   if (error.code === "auth/network-request-failed") {
     return "Connection failed. Check your internet connection.";
@@ -197,17 +182,12 @@ function bindEvents() {
   });
 
   $("new-password").addEventListener("input", event => {
-    const value = event.target.value;
-    const result = passwordCheck(value);
+  const result = passwordCheck(event.target.value);
 
-    $("password-meter").value = result.score;
-
-    $("password-strength").textContent = !value
-      ? "Please fill the password"
-      : result.valid
-        ? ""
-        : "The password does not yet meet all the requirements.";
-  });
+  $("password-meter").value = result.score;
+  $("password-strength").textContent = result.label;
+  $("password-strength").dataset.level = result.level;
+});
 
   // MASUK → DASHBOARD ATAU PANEL VERIFIKASI
   $("signin").addEventListener("submit", event => {
@@ -241,10 +221,16 @@ function bindEvents() {
       const data = new FormData(form);
       const password = data.get("password");
 
-      if (!passwordCheck(password).valid) {
-        message("The password does not meet the requirements.");
+      const result = passwordCheck(password);
+
+      if (!result.valid || result.score < 5) {
+          message(
+          "Your password does not meet the requirements. " +
+          "Use 16–128 characters, including uppercase and lowercase letters, " +
+          "a number, and a symbol."
+      );
         return;
-      }
+}
 
       if (password !== data.get("confirm")) {
         message("Password confirmation does not match.");
@@ -353,7 +339,7 @@ function bindEvents() {
 
     run(form, async () => {
       if (Date.now() < resetReadyAt) {
-        message("Tunggu 60 detik sebelum meminta tautan lagi.");
+        message("Wait 60 seconds before requesting the link again.");
         return;
       }
 
@@ -385,7 +371,7 @@ function bindEvents() {
 
     run(form, async () => {
       if (Date.now() < smsReadyAt) {
-        message("Tunggu 60 detik sebelum meminta kode baru.");
+        message("Wait 60 seconds before requesting a new code.");
         return;
       }
 
@@ -483,32 +469,51 @@ function bindEvents() {
   });
 
   // KELUAR → KEMBALI KE FORM MASUK
-  $("logout").addEventListener("click", event => {
-    run(event.currentTarget, async () => {
-      await signOut(auth);
+  $("logout").addEventListener("click", async event => {
+  const button = event.currentTarget;
 
-      confirmation = undefined;
-      resetCaptcha();
+  if (button.disabled) return;
 
-      $("confirm-sms").hidden = true;
+  button.disabled = true;
+  button.textContent = "Signing out...";
+  message("Signing out. Please wait...");
 
-      for (const id of [
-        "signin",
-        "signup",
-        "reset-password",
-        "send-sms",
-        "confirm-sms"
-      ]) {
-        $(id).reset();
-      }
+  try {
+    await new Promise(resolve => setTimeout(resolve, 5000));
 
-      $("password-meter").value = 0;
-      $("password-strength").textContent = "Please fill the password";
+    await signOut(auth);
 
-      renderAccount(null);
-      message("You have logged out.");
-    }, "logout");
-  });
+    confirmation = undefined;
+    resetCaptcha();
+
+    $("confirm-sms").hidden = true;
+
+    for (const id of [
+      "signin",
+      "signup",
+      "reset-password",
+      "send-sms",
+      "confirm-sms",
+      "email-passcode-request",
+      "email-passcode-verify"
+    ]) {
+      const form = document.getElementById(id);
+      if (form) form.reset();
+    }
+
+    $("password-meter").value = 0;
+    $("password-strength").textContent = "Enter a password.";
+
+    renderAccount(null);
+    message("You have logged out.");
+  } catch (error) {
+    console.error("Sign-out failed:", error.code);
+    message("Unable to complete sign-out. Please try again.");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Sign out";
+  }
+});
 }
 
 async function initialize() {
@@ -563,6 +568,83 @@ async function initialize() {
 
 initialize();
 
+const requestForm = document.getElementById("email-passcode-request");
+const verifyForm = document.getElementById("email-passcode-verify");
+const status = document.getElementById("email-passcode-status");
+
+let passcodeEmail = "";
+
+async function passcodeRequest(path, body) {
+  const response = await fetch(`/api/email-passcode/${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || "Request failed. Please try again.");
+  }
+
+  return data;
+}
+
+requestForm.addEventListener("submit", async event => {
+  event.preventDefault();
+
+  const button = requestForm.querySelector("button");
+  button.disabled = true;
+  button.textContent = "Sending...";
+
+  try {
+    const email = new FormData(requestForm)
+      .get("email")
+      .trim();
+
+    const data = await passcodeRequest("request", { email });
+
+    passcodeEmail = email;
+    verifyForm.hidden = false;
+    status.textContent = data.message;
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = "Send passcode";
+  }
+});
+
+verifyForm.addEventListener("submit", async event => {
+  event.preventDefault();
+
+  const button = verifyForm.querySelector("button");
+  button.disabled = true;
+  button.textContent = "Verifying...";
+
+  try {
+    const code = new FormData(verifyForm).get("code").trim();
+
+    const data = await passcodeRequest("verify", {
+      email: passcodeEmail,
+      code
+    });
+
+    await signInWithCustomToken(auth, data.token);
+
+    verifyForm.reset();
+    verifyForm.hidden = true;
+    status.textContent = "Signed out successfully.";
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = "Verify and sign in";
+  }
+});
+
   bindEvents();
 
     onAuthStateChanged(auth, user => {
@@ -576,14 +658,14 @@ initialize();
         message("Verify your email to access the dashboard.");
       }
     }, () => {
-      message("Sesi tidak dapat dimuat. Muat ulang halaman.");
+      message("The session could not be loaded. Reload page.");
     });
   } catch (error) {
-    console.error("Aplikasi gagal dimuat:", error);
+    console.error("The application failed to load:", error);
 
     message(
-      "Aplikasi belum siap. Periksa konfigurasi Firebase " +
-      "atau error pada Console browser."
+      "The app is not ready. Check the Firebase configuration. " +
+      "or an error in the browser console."
     );
   }
 }
