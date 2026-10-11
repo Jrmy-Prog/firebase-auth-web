@@ -97,6 +97,11 @@ function resetCaptcha() {
 }
 
 function renderAccount(user) {
+const welcomeHeading = $("dashboard-welcome");
+
+if (welcomeHeading) {
+  welcomeHeading.textContent = welcomeMessage(user);
+}
   $("guest").hidden = Boolean(user);
   $("account").hidden = !user;
   $("welcome").hidden = Boolean(user);
@@ -172,7 +177,18 @@ function startResendCountdown() {
     resendTimer = setInterval(update, 1000);
   }
 }
+function welcomeMessage(user) {
+  const rawName =
+    user?.displayName?.trim() ||
+    user?.email?.split("@")[0] ||
+    "";
 
+  const name = rawName
+    ? rawName.charAt(0).toUpperCase() + rawName.slice(1)
+    : "";
+
+  return name ? `Welcome, ${name}!` : "Welcome!";
+}
 function bindEvents() {
   document.querySelectorAll("[data-panel]").forEach(button => {
     button.addEventListener("click", () => {
@@ -202,12 +218,12 @@ function bindEvents() {
         data.get("email").trim(),
         data.get("password")
       );
-
+      
       renderAccount(user);
       form.reset();
 
       message(user.emailVerified
-        ? "Welcome to the Ruang Akun."
+        ? welcomeMessage(user)
         : "Verify your email to access the dashboard.");
     }, "signin");
   });
@@ -226,7 +242,7 @@ function bindEvents() {
       if (!result.valid || result.score < 5) {
           message(
           "Your password does not meet the requirements. " +
-          "Use 16–128 characters, including uppercase and lowercase letters, " +
+          "Use 12–128 characters, including uppercase and lowercase letters, " +
           "a number, and a symbol."
       );
         return;
@@ -315,9 +331,15 @@ function bindEvents() {
 
       renderAccount(user);
 
-      message(user.emailVerified
-        ? "Email verified. Welcome to the dashboard!"
-        : "Email not yet verified. Open the link in your email.");
+      const emailName = user.email?.split("@")[0] || "";
+      const rawName = user.displayName?.trim() || emailName;
+      const name = rawName
+  ? rawName.charAt(0).toUpperCase() + rawName.slice(1)
+  : "";
+
+    message(user.emailVerified
+  ? `Email verified. Welcome${name ? `, ${name}` : ""}!`
+  : "Email not yet verified. Open the link in your email.");
     }, "verification");
   });
 

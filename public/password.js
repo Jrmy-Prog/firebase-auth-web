@@ -33,7 +33,7 @@ export function passwordCheck(password) {
     score = 2;
   } else if (variety < 3) {
     score = 3;
-  } else if (password.length < 16 || variety < 4) {
+  } else if (password.length < 12 || variety < 4) {
     score = 4;
   } else {
     score = 5;
