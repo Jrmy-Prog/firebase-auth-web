@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
-import { createEmailPasscodeRouter } from "./email-passcode.js";
+import { createEmailPasscodeRouter } from "../firebase-auth-web/email-passcode.js";
 import {
   initializeApp,
   applicationDefault,
@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import {
   requireAuth,
   requireVerifiedIdentity
-} from "./auth.js";
+} from "../firebase-auth-web/auth.js";
 
 const config = {
   apiKey: process.env.FIREBASE_API_KEY,
